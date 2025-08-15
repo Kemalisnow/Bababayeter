@@ -1,0 +1,235 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local waypoints = {}
+
+local FLY_HEIGHT_OFFSET = 7
+local FLY_SPEED = 20
+
+-- Ana ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "WaypointSystem"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Panel (sürüklenebilir)
+local panel = Instance.new("Frame")
+panel.Size = UDim2.new(0, 350, 0, 200)
+panel.Position = UDim2.new(0.5, -175, 0.5, -100)
+panel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+panel.BackgroundTransparency = 0.1
+panel.BorderSizePixel = 0
+panel.Active = true
+panel.Draggable = true
+panel.Name = "MainPanel"
+panel.Parent = screenGui
+panel.ZIndex = 15
+panel.Visible = false -- Başlangıçta kapalı
+
+-- Kapatma Butonu (X)
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 5)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+closeButton.TextColor3 = Color3.new(1,1,1)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 20
+closeButton.Parent = panel
+closeButton.ZIndex = 16
+closeButton.AutoButtonColor = true
+closeButton.BorderSizePixel = 0
+closeButton.TextScaled = true
+closeButton.AnchorPoint = Vector2.new(0, 0)
+
+-- Başlık
+local title = Instance.new("TextLabel")
+title.Text = "Waypoint Sistemi"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+title.TextColor3 = Color3.fromRGB(0, 170, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 26
+title.Parent = panel
+title.ZIndex = 16
+
+-- TextBox komut için
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(0, 240, 0, 40)
+textBox.Position = UDim2.new(0, 10, 0, 50)
+textBox.PlaceholderText = "Waypoint ismi gir (örn: 1)"
+textBox.ClearTextOnFocus = false
+textBox.Font = Enum.Font.Gotham
+textBox.TextSize = 20
+textBox.TextColor3 = Color3.new(1, 1, 1)
+textBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+textBox.BorderSizePixel = 0
+textBox.Parent = panel
+textBox.ZIndex = 16
+
+-- Oluştur Butonu
+local createButton = Instance.new("TextButton")
+createButton.Size = UDim2.new(0, 80, 0, 40)
+createButton.Position = UDim2.new(0, 260, 0, 50)
+createButton.Text = "Oluştur"
+createButton.Font = Enum.Font.GothamBold
+createButton.TextSize = 20
+createButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+createButton.TextColor3 = Color3.new(1,1,1)
+createButton.BorderSizePixel = 0
+createButton.AutoButtonColor = true
+createButton.Parent = panel
+createButton.ZIndex = 16
+createButton.ClipsDescendants = true
+createButton.Style = Enum.ButtonStyle.RobloxRoundButton
+
+-- Waypoint butonlarını tutacak frame
+local buttonsFrame = Instance.new("Frame")
+buttonsFrame.Size = UDim2.new(1, -20, 0, 60)
+buttonsFrame.Position = UDim2.new(0, 10, 0, 100)
+buttonsFrame.BackgroundTransparency = 1
+buttonsFrame.Parent = panel
+buttonsFrame.ZIndex = 16
+buttonsFrame.ClipsDescendants = true
+
+-- Butonların yatay olarak yan yana olmasını sağlayacak UIGridLayout
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0, 150, 0, 50)
+gridLayout.CellPadding = UDim2.new(0, 15, 0, 10)
+gridLayout.FillDirection = Enum.FillDirection.Horizontal
+gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+gridLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+gridLayout.Parent = buttonsFrame
+
+local function flyTo(targetPos)
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	local hrp = char.HumanoidRootPart
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	humanoid.PlatformStand = true
+	hrp.CanCollide = false
+
+	local startPos = hrp.Position + Vector3.new(0, 5, 0)
+	hrp.CFrame = CFrame.new(startPos)
+
+	local midPoint = Vector3.new(targetPos.X, targetPos.Y + FLY_HEIGHT_OFFSET, targetPos.Z)
+	local upTime = (startPos - midPoint).Magnitude / FLY_SPEED
+	local downTime = (midPoint - targetPos).Magnitude / FLY_SPEED
+
+	local tweenUp = TweenService:Create(hrp, TweenInfo.new(upTime, Enum.EasingStyle.Sine), {
+		CFrame = CFrame.new(midPoint)
+	})
+	tweenUp:Play()
+	tweenUp.Completed:Wait()
+
+	local tweenDown = TweenService:Create(hrp, TweenInfo.new(downTime, Enum.EasingStyle.Sine), {
+		CFrame = CFrame.new(targetPos)
+	})
+	tweenDown:Play()
+	tweenDown.Completed:Wait()
+
+	humanoid.PlatformStand = false
+	hrp.CanCollide = true
+end
+
+local function updateVisibleButtons()
+	local children = buttonsFrame:GetChildren()
+	local shown = 0
+	for _, child in ipairs(children) do
+		if child:IsA("TextButton") then
+			shown = shown + 1
+			if shown <= 2 then
+				child.Visible = true
+			else
+				child.Visible = false
+			end
+		end
+	end
+end
+
+local function createWaypointButton(name)
+	-- Önce varsa sil
+	local existingButton = buttonsFrame:FindFirstChild(name)
+	if existingButton then
+		existingButton:Destroy()
+	end
+
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(0, 150, 0, 50)
+	button.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 24
+	button.Text = name
+	button.Name = name
+	button.Parent = buttonsFrame
+	button.AutoButtonColor = true
+	button.BorderSizePixel = 0
+	button.ClipsDescendants = true
+	button.Style = Enum.ButtonStyle.RobloxRoundButton
+	button.ZIndex = 17
+
+	button.MouseButton1Click:Connect(function()
+		local wp = waypoints[name]
+		if wp then
+			flyTo(wp.Position)
+		else
+			warn("Waypoint '" .. name .. "' bulunamadı.")
+		end
+	end)
+
+	updateVisibleButtons()
+end
+
+-- Yeni waypoint oluşturma
+createButton.MouseButton1Click:Connect(function()
+	local name = textBox.Text:match("%S+")
+	if not name or name == "" then return end
+
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	local hrp = char.HumanoidRootPart
+
+	-- Aynı isimde varsa eski waypoint'i sil
+	if waypoints[name] and waypoints[name]:IsA("BasePart") then
+		waypoints[name]:Destroy()
+		waypoints[name] = nil
+	end
+
+	local wp = Instance.new("Part")
+	wp.Name = "Waypoint_" .. name
+	wp.Size = Vector3.new(2, 1, 2)
+	wp.Position = hrp.Position + Vector3.new(0, 6, 0)
+	wp.Anchored = true
+	wp.CanCollide = false
+	wp.Transparency = 0.5
+	wp.Material = Enum.Material.Neon
+	wp.Color = Color3.fromRGB(0, 170, 255)
+	wp.Parent = Workspace
+
+	waypoints[name] = wp
+	createWaypointButton(name)
+
+	textBox.Text = ""
+end)
+
+-- Kapatma butonu
+closeButton.MouseButton1Click:Connect(function()
+	panel.Visible = false
+end)
+
+-- Klavye "Ü" tuşu ile aç/kapa
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		-- Türkçe Q klavyesindeki Ü tuşu KeyCode.Unknown, bunu alternatif ile kontrol edelim:
+		if input.KeyCode == Enum.KeyCode.U or input.KeyCode == Enum.KeyCode.Unknown then
+			panel.Visible = not panel.Visible
+		end
+	end
+end)
